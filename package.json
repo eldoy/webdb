@@ -2,6 +2,9 @@
   "name": "@eldoy/webdb",
   "version": "0.1.0",
   "description": "Document database client powered by CouchDB.",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "database",
     "couchdb",
