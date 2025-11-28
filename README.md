@@ -4,13 +4,13 @@ Document database API backed by CouchDB, exposed through a Mongo-style client.
 
 ### Installation
 ```sh
-npm i webdb
+npm i @eldoy/webdb
 ````
 
 ### Usage
 
 ```js
-var webdb = require('webdb')
+var webdb = require('@eldoy/webdb')
 var db = webdb('http://admin:mysecretpassword@localhost:5984')
 
 // Create one
