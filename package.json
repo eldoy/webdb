@@ -1,0 +1,21 @@
+{
+  "name": "webdb",
+  "version": "0.1.0",
+  "description": "WebDB database",
+  "scripts": {
+    "test": "spekk",
+    "test:watch": "nodemon --exec spekk"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eldoy/webdb"
+  },
+  "author": "Vidar Eldøy <vidar@eldoy.com>",
+  "license": "ISC",
+  "dependencies": {
+    "nano": "^11.0.3"
+  },
+  "devDependencies": {
+    "spekk": "^0.3.2"
+  }
+}
