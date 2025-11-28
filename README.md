@@ -5,7 +5,7 @@ Document database API backed by CouchDB, exposed through a Mongo-style client.
 ### Installation
 ```sh
 npm i @eldoy/webdb
-````
+```
 
 ### Usage
 
@@ -82,6 +82,125 @@ await db.compact('user')
 // Drop all databases
 await db.drop()
 ```
+
+### Mango Query Options
+
+WebDB queries map directly to CouchDB Mango selectors. All Mango operators and options work as expected through `find()` and `batch()`.
+
+#### Comparison Operators
+Mango supports standard comparison operators inside selectors:
+
+```
+$eq   equal
+$ne   not equal
+$gt   greater than
+$gte  greater than or equal
+$lt   less than
+$lte  less than or equal
+```
+
+Example:
+
+```js
+await db('user').find({
+  age: { $gte: 18 }
+})
+```
+
+#### Logical Operators
+
+Combine conditions using logical operators:
+
+```
+$and
+$or
+$not
+$nor
+```
+
+Example:
+
+```js
+await db('user').find({
+  $or: [{ role: 'admin' }, { active: true }]
+})
+```
+
+#### Sorting
+
+Sorting requires an index on every field in the sort specification:
+
+```js
+await db('user').index([['created']])
+
+await db('user').find(
+  {},
+  { sort: [{ created: 'asc' }] }
+)
+```
+
+#### Limiting
+
+Limit returned documents:
+
+```js
+await db('user').find({}, { limit: 10 })
+```
+
+#### Projection (fields)
+
+Return only selected fields:
+
+```js
+await db('user').find(
+  {},
+  { fields: ['name', 'email'] }
+)
+```
+
+#### Date Handling
+
+CouchDB stores dates as strings.
+Using ISO-8601 timestamps (`new Date().toISOString()`) enables:
+
+* correct lexical comparison
+* correct sorting
+* correct `$gt` / `$lt` range queries
+
+Example:
+
+```js
+await db('log').find({
+  created: { $gt: "2024-01-01T00:00:00.000Z" }
+})
+```
+
+ISO strings compare and sort in true chronological order.
+
+#### Batch Queries
+
+`batch()` supports all Mango options:
+
+* `size` (page size)
+* `limit`
+* `sort`
+* `fields`
+* standard selectors
+
+Example:
+
+```js
+await db('user').batch(
+  { created: { $gt: cutoff } },
+  { size: 100, sort: [{ created: 'asc' }] },
+  async function (docs) {
+    // process chunk
+  }
+)
+```
+
+All Mango selectors and options work identically in both `find()` and `batch()`.
+
 
 ### Notes on Indexing, Sorting, and Mango Queries
 
