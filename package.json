@@ -1,15 +1,31 @@
 {
   "name": "webdb",
   "version": "0.1.0",
-  "description": "WebDB database",
+  "description": "Document database client powered by CouchDB.",
+  "keywords": [
+    "database",
+    "couchdb",
+    "mango",
+    "document-store",
+    "nosql",
+    "json",
+    "client",
+    "db",
+    "nano",
+    "webdb"
+  ],
   "scripts": {
     "test": "spekk",
     "test:watch": "nodemon --exec spekk"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/eldoy/webdb"
+    "url": "git+https://github.com/eldoy/webdb.git"
   },
+  "bugs": {
+    "url": "https://github.com/eldoy/webdb/issues"
+  },
+  "homepage": "https://github.com/eldoy/webdb#readme",
   "author": "Vidar Eldøy <vidar@eldoy.com>",
   "license": "ISC",
   "dependencies": {
