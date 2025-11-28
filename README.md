@@ -86,10 +86,12 @@ await db.drop()
 ### Notes on Indexing, Sorting, and Mango Queries
 
 **1. Selector fields and indexes**
+
 Mango performs best when the selector matches an existing index.
 Any field used in `{ selector: … }` benefits from being part of an index, but it is not required unless sorting is used.
 
 **2. Sorting requires indexing**
+
 Mango enforces that **every field in the sort must be indexed**.
 Example:
 
@@ -101,6 +103,7 @@ await db('user').find({}, { sort: [{ age: 'asc' }] })   // valid
 Sorting without the correct index returns an error.
 
 **3. Compound indexes**
+
 An index like:
 
 ```js
@@ -110,17 +113,21 @@ await db('user').index([['name', 'email']])
 supports selectors and sorts that use `name`, or `name` and `email` together, in the defined order.
 
 **4. Projection (`fields`)**
+
 Projection returns only selected fields.
 Unindexed projection works fine; indexing does not affect `fields`.
 
 **5. Pagination (batch)**
+
 `batch()` uses Mango bookmarks internally.
 It respects all options: `sort`, `limit`, `fields`, and `size`.
 
 **6. Create-on-first-use**
+
 Databases are auto-created when used. Explicit `drop()` allows clean-state tests.
 
 **7. Null results**
+
 `get()` returns `null` when no match exists.
 
 ### ID note
