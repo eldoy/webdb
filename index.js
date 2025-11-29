@@ -22,6 +22,10 @@ module.exports = function (url) {
     await server.db.compact(name)
   }
 
+  db.info = async function () {
+    return await server.info()
+  }
+
   return db
 }
 

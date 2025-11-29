@@ -281,3 +281,8 @@ test('compact', async function ({ t }) {
   await db.compact('user')
   t.ok(true)
 })
+
+test('info', async function ({ t }) {
+  await db.info()
+  t.ok(true)
+})
