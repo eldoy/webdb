@@ -39,8 +39,8 @@ var removed = await db('user').remove(
   { name: 'B' }
 )
 
-// Upsert (create or update one)
-var doc = await db('user').upsert(
+// Put (create or update one)
+var doc = await db('user').put(
   { email: 'a@example.com' },
   { email: 'a@example.com', name: 'Alice' }
 )

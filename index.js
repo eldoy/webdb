@@ -46,7 +46,7 @@ function api(name, server) {
       return docs.length
     },
 
-    upsert: async function (query, update) {
+    put: async function (query, update) {
       var dbi = await ensure(name, server)
 
       // find one match

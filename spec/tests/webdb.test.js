@@ -19,18 +19,18 @@ test('bulk', async function ({ t }) {
   t.equal(n, 2)
 })
 
-test('upsert create', async function ({ t }) {
-  var doc = await db('user').upsert({ name: 'X' }, { name: 'X', age: 10 })
+test('put create', async function ({ t }) {
+  var doc = await db('user').put({ name: 'X' }, { name: 'X', age: 10 })
 
   t.ok(doc && doc._id)
   t.equal(doc.name, 'X')
   t.equal(doc.age, 10)
 })
 
-test('upsert update', async function ({ t }) {
+test('put update', async function ({ t }) {
   await db('user').create({ name: 'X', age: 10 })
 
-  var doc = await db('user').upsert({ name: 'X' }, { name: 'X', age: 20 })
+  var doc = await db('user').put({ name: 'X' }, { name: 'X', age: 20 })
 
   t.ok(doc && doc._id)
   t.equal(doc.name, 'X')
