@@ -172,7 +172,9 @@ test('batch', async function ({ t }) {
   var collected = []
 
   await db('user').batch({}, { size: 2 }, async function (docs) {
-    for (var i = 0; i < docs.length; i++) collected.push(docs[i].v)
+    for (var i = 0; i < docs.length; i++) {
+      collected.push(docs[i].v)
+    }
   })
 
   t.equal(collected.length, 4)
@@ -190,7 +192,9 @@ test('batch with query', async function ({ t }) {
   var out = []
 
   await db('user').batch({ type: 'a' }, { size: 10 }, async function (docs) {
-    for (var i = 0; i < docs.length; i++) out.push(docs[i].v)
+    for (var i = 0; i < docs.length; i++) {
+      out.push(docs[i].v)
+    }
   })
 
   t.equal(out.length, 2)
@@ -236,7 +240,9 @@ test('batch respects limit', async function ({ t }) {
   var list = []
 
   await db('user').batch({}, { limit: 2 }, async function (docs) {
-    for (var i = 0; i < docs.length; i++) list.push(docs[i].n)
+    for (var i = 0; i < docs.length; i++) {
+      list.push(docs[i].n)
+    }
   })
 
   t.equal(list.length, 2)
