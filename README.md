@@ -28,6 +28,23 @@ var n = await db('user').update(
   { active: true }
 )
 
+// Set (update exactly one)
+var updated = await db('user').set(
+  { name: 'A' },
+  { name: 'B', active: true }
+)
+
+// Remove (delete exactly one)
+var removed = await db('user').remove(
+  { name: 'B' }
+)
+
+// Upsert (create or update one)
+var doc = await db('user').upsert(
+  { email: 'a@example.com' },
+  { email: 'a@example.com', name: 'Alice' }
+)
+
 // Get one (first match)
 var doc = await db('user').get({ name: 'Heimdal' })
 
@@ -91,12 +108,13 @@ WebDB queries map directly to CouchDB Mango selectors. All Mango operators and o
 Mango supports standard comparison operators inside selectors:
 
 ```
-$eq   equal
-$ne   not equal
-$gt   greater than
-$gte  greater than or equal
-$lt   less than
-$lte  less than or equal
+$eq     equal
+$ne     not equal
+$gt     greater than
+$gte    greater than or equal
+$lt     less than
+$lte    less than or equal
+$regex  regular expression matching
 ```
 
 Example:

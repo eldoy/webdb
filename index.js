@@ -46,6 +46,39 @@ function api(name, server) {
       return docs.length
     },
 
+    upsert: async function (query, update) {
+      var dbi = await ensure(name, server)
+
+      // find one match
+      var r = await dbi.find({
+        selector: query,
+        limit: 1
+      })
+
+      // create if not found
+      if (!r.docs.length) {
+        var created = await dbi.insert(update)
+        return {
+          _id: created.id,
+          _rev: created.rev,
+          ...update
+        }
+      }
+
+      // update existing
+      var cur = r.docs[0]
+      var next = {}
+
+      for (var k in cur) next[k] = cur[k]
+      for (var k in update) next[k] = update[k]
+
+      var res = await dbi.insert(next)
+
+      next._id = res.id
+      next._rev = res.rev
+      return next
+    },
+
     update: async function (query, update) {
       var db = await ensure(name, server)
       var r = await db.find({ selector: query })
@@ -68,6 +101,36 @@ function api(name, server) {
       var dbi = await ensure(name, server)
       var r = await dbi.find({ selector: query, limit: 1 })
       return r.docs[0] || null
+    },
+
+    set: async function (query, update) {
+      var dbi = await ensure(name, server)
+
+      // normalize: string → _id selector
+      var selector = typeof query === 'string' ? { _id: query } : query
+
+      // find one
+      var r = await dbi.find({
+        selector: selector,
+        limit: 1
+      })
+
+      if (!r.docs.length) return null
+
+      var cur = r.docs[0]
+      var next = {}
+
+      // merge current doc + update
+      for (var k in cur) next[k] = cur[k]
+      for (var k in update) next[k] = update[k]
+
+      // write updated doc
+      var res = await dbi.insert(next)
+
+      // return updated document shape
+      next._id = res.id
+      next._rev = res.rev
+      return next
     },
 
     //
@@ -96,6 +159,39 @@ function api(name, server) {
       var dbi = await ensure(name, server)
       for (var i = 0; i < list.length; i++) {
         await dbi.createIndex({ index: { fields: list[i] } })
+      }
+    },
+
+    //
+    // REMOVE
+    //
+
+    remove: async function (query) {
+      var dbi = await ensure(name, server)
+
+      // normalize: string → _id selector
+      var selector = typeof query === 'string' ? { _id: query } : query
+
+      // find one
+      var r = await dbi.find({
+        selector: selector,
+        limit: 1
+      })
+
+      if (!r.docs.length) return null
+
+      var doc = r.docs[0]
+
+      // mark as deleted
+      var res = await dbi.insert({
+        _id: doc._id,
+        _rev: doc._rev,
+        _deleted: true
+      })
+
+      return {
+        _id: res.id,
+        _rev: res.rev
       }
     },
 

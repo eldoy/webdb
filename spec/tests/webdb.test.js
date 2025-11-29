@@ -6,7 +6,7 @@ beforeEach(async function ({ t }) {
 })
 
 //
-// CRUD: create, bulk, update, get
+// CRUD: create, bulk, update, get, set
 //
 
 test('create', async function ({ t }) {
@@ -17,6 +17,24 @@ test('create', async function ({ t }) {
 test('bulk', async function ({ t }) {
   var n = await db('user').bulk([{ name: 'A' }, { name: 'B' }])
   t.equal(n, 2)
+})
+
+test('upsert create', async function ({ t }) {
+  var doc = await db('user').upsert({ name: 'X' }, { name: 'X', age: 10 })
+
+  t.ok(doc && doc._id)
+  t.equal(doc.name, 'X')
+  t.equal(doc.age, 10)
+})
+
+test('upsert update', async function ({ t }) {
+  await db('user').create({ name: 'X', age: 10 })
+
+  var doc = await db('user').upsert({ name: 'X' }, { name: 'X', age: 20 })
+
+  t.ok(doc && doc._id)
+  t.equal(doc.name, 'X')
+  t.equal(doc.age, 20)
 })
 
 test('update one', async function ({ t }) {
@@ -35,6 +53,26 @@ test('get', async function ({ t }) {
   await db('user').create({ name: 'Heimdal' })
   var doc = await db('user').get({ name: 'Heimdal' })
   t.ok(doc && doc._id)
+})
+
+test('set id', async function ({ t }) {
+  var doc = await db('user').create({ name: 'Old', age: 10 })
+
+  var updated = await db('user').set(doc.id, { name: 'New', age: 20 })
+
+  t.ok(updated && updated._id)
+  t.equal(updated.name, 'New')
+  t.equal(updated.age, 20)
+})
+
+test('set attribute', async function ({ t }) {
+  await db('user').create({ name: 'Old', age: 10 })
+
+  var updated = await db('user').set({ name: 'Old' }, { name: 'New', age: 20 })
+
+  t.ok(updated && updated._id)
+  t.equal(updated.name, 'New')
+  t.equal(updated.age, 20)
 })
 
 //
@@ -91,6 +129,33 @@ test('index', async function ({ t }) {
     { sort: [{ name: 'asc' }, { email: 'asc' }] }
   )
   t.ok(Array.isArray(docs))
+})
+
+//
+// REMOVE
+//
+
+test('remove id', async function ({ t }) {
+  var doc = await db('user').create({ name: 'A' })
+
+  var removed = await db('user').remove(doc.id)
+
+  t.ok(removed && removed._id)
+  t.equal(removed._id, doc.id)
+
+  var check = await db('user').get({ _id: doc.id })
+  t.equal(check, null)
+})
+
+test('remove attribute', async function ({ t }) {
+  await db('user').create({ name: 'A' })
+
+  var removed = await db('user').remove({ name: 'A' })
+
+  t.ok(removed && removed._id)
+
+  var check = await db('user').get({ name: 'A' })
+  t.equal(check, null)
 })
 
 //
