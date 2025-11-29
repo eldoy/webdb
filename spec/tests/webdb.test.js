@@ -55,17 +55,7 @@ test('get', async function ({ t }) {
   t.ok(doc && doc._id)
 })
 
-test('set id', async function ({ t }) {
-  var doc = await db('user').create({ name: 'Old', age: 10 })
-
-  var updated = await db('user').set(doc.id, { name: 'New', age: 20 })
-
-  t.ok(updated && updated._id)
-  t.equal(updated.name, 'New')
-  t.equal(updated.age, 20)
-})
-
-test('set attribute', async function ({ t }) {
+test('set', async function ({ t }) {
   await db('user').create({ name: 'Old', age: 10 })
 
   var updated = await db('user').set({ name: 'Old' }, { name: 'New', age: 20 })
@@ -73,6 +63,37 @@ test('set attribute', async function ({ t }) {
   t.ok(updated && updated._id)
   t.equal(updated.name, 'New')
   t.equal(updated.age, 20)
+})
+
+test('remove', async function ({ t }) {
+  await db('user').create({ name: 'A' })
+
+  var removed = await db('user').remove({ name: 'A' })
+
+  t.ok(removed && removed._id)
+
+  var check = await db('user').get({ name: 'A' })
+  t.equal(check, null)
+})
+
+test('delete one', async function ({ t }) {
+  var a = await db('user').create({ name: 'X' })
+  await db('user').create({ name: 'Y' })
+
+  var n = await db('user').delete({ _id: a.id })
+  t.equal(n, 1)
+
+  var doc = await db('user').get({ _id: a.id })
+  t.equal(doc, null)
+})
+
+test('delete many', async function ({ t }) {
+  await db('user').bulk([{ role: 'x' }, { role: 'x' }, { role: 'y' }])
+  var n = await db('user').delete({ role: 'x' })
+  t.equal(n, 2)
+
+  var docs = await db('user').find({ role: 'x' })
+  t.equal(docs.length, 0)
 })
 
 //
@@ -129,57 +150,6 @@ test('index', async function ({ t }) {
     { sort: [{ name: 'asc' }, { email: 'asc' }] }
   )
   t.ok(Array.isArray(docs))
-})
-
-//
-// REMOVE
-//
-
-test('remove id', async function ({ t }) {
-  var doc = await db('user').create({ name: 'A' })
-
-  var removed = await db('user').remove(doc.id)
-
-  t.ok(removed && removed._id)
-  t.equal(removed._id, doc.id)
-
-  var check = await db('user').get({ _id: doc.id })
-  t.equal(check, null)
-})
-
-test('remove attribute', async function ({ t }) {
-  await db('user').create({ name: 'A' })
-
-  var removed = await db('user').remove({ name: 'A' })
-
-  t.ok(removed && removed._id)
-
-  var check = await db('user').get({ name: 'A' })
-  t.equal(check, null)
-})
-
-//
-// DELETE: one and many
-//
-
-test('delete one', async function ({ t }) {
-  var a = await db('user').create({ name: 'X' })
-  await db('user').create({ name: 'Y' })
-
-  var n = await db('user').delete({ _id: a.id })
-  t.equal(n, 1)
-
-  var doc = await db('user').get({ _id: a.id })
-  t.equal(doc, null)
-})
-
-test('delete many', async function ({ t }) {
-  await db('user').bulk([{ role: 'x' }, { role: 'x' }, { role: 'y' }])
-  var n = await db('user').delete({ role: 'x' })
-  t.equal(n, 2)
-
-  var docs = await db('user').find({ role: 'x' })
-  t.equal(docs.length, 0)
 })
 
 //

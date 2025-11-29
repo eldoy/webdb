@@ -106,12 +106,9 @@ function api(name, server) {
     set: async function (query, update) {
       var dbi = await ensure(name, server)
 
-      // normalize: string → _id selector
-      var selector = typeof query === 'string' ? { _id: query } : query
-
       // find one
       var r = await dbi.find({
-        selector: selector,
+        selector: query,
         limit: 1
       })
 
@@ -133,48 +130,12 @@ function api(name, server) {
       return next
     },
 
-    //
-    // FIND
-    //
-
-    find: async function (selector, opts) {
-      var dbi = await ensure(name, server)
-
-      var q = { selector: selector }
-      if (opts) {
-        if (opts.sort) q.sort = opts.sort
-        if (opts.limit) q.limit = opts.limit
-        if (opts.fields) q.fields = opts.fields
-      }
-
-      var r = await dbi.find(q)
-      return r.docs
-    },
-
-    //
-    // INDEX
-    //
-
-    index: async function (list) {
-      var dbi = await ensure(name, server)
-      for (var i = 0; i < list.length; i++) {
-        await dbi.createIndex({ index: { fields: list[i] } })
-      }
-    },
-
-    //
-    // REMOVE
-    //
-
     remove: async function (query) {
       var dbi = await ensure(name, server)
 
-      // normalize: string → _id selector
-      var selector = typeof query === 'string' ? { _id: query } : query
-
       // find one
       var r = await dbi.find({
-        selector: selector,
+        selector: query,
         limit: 1
       })
 
@@ -195,10 +156,6 @@ function api(name, server) {
       }
     },
 
-    //
-    // DELETE
-    //
-
     delete: async function (query) {
       var dbi = await ensure(name, server)
 
@@ -217,6 +174,35 @@ function api(name, server) {
 
       await dbi.bulk({ docs: out })
       return out.length
+    },
+
+    //
+    // FIND
+    //
+
+    find: async function (query, opts) {
+      var dbi = await ensure(name, server)
+
+      var q = { selector: query }
+      if (opts) {
+        if (opts.sort) q.sort = opts.sort
+        if (opts.limit) q.limit = opts.limit
+        if (opts.fields) q.fields = opts.fields
+      }
+
+      var r = await dbi.find(q)
+      return r.docs
+    },
+
+    //
+    // INDEX
+    //
+
+    index: async function (list) {
+      var dbi = await ensure(name, server)
+      for (var i = 0; i < list.length; i++) {
+        await dbi.createIndex({ index: { fields: list[i] } })
+      }
     },
 
     //
