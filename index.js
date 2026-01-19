@@ -3,13 +3,9 @@ var nano = require('nano')
 module.exports = function (url) {
   var server = nano(url)
 
-  var db = function (name) {
-    return api(name, server)
+  function db(name) {
+    return collection(name, server)
   }
-
-  //
-  // SERVER-LEVEL OPS (drop all, compact specific)
-  //
 
   db.drop = async function () {
     var list = await server.db.list()
@@ -23,269 +19,197 @@ module.exports = function (url) {
   }
 
   db.info = async function () {
-    return await server.info()
+    return server.info()
   }
 
   return db
 }
 
-//
-// COLLECTION-LEVEL API (ordered to match test suite)
-//
+function collection(name, server) {
+  var handle = null
+  var initPromise = null
 
-function api(name, server) {
-  return {
-    //
-    // CRUD
-    //
+  function init() {
+    if (initPromise) return initPromise
 
-    create: async function (doc) {
-      var db = await ensure(name, server)
-      return db.insert(doc)
-    },
+    initPromise = (async function () {
+      try {
+        await server.db.get(name)
+      } catch (e) {
+        try {
+          await server.db.create(name)
+        } catch (e2) {}
+      }
+      handle = server.db.use(name)
+      return handle
+    })()
 
-    bulk: async function (docs) {
-      var db = await ensure(name, server)
-      await db.bulk({ docs: docs })
-      return docs.length
-    },
+    return initPromise
+  }
 
-    put: async function (query, update) {
-      var dbi = await ensure(name, server)
-
-      // find one match
-      var r = await dbi.find({
-        selector: query,
-        limit: 1
-      })
-
-      // create if not found
-      if (!r.docs.length) {
-        var created = await dbi.insert(update)
-        return {
-          _id: created.id,
-          _rev: created.rev,
-          ...update
+  var data = new Proxy(
+    {},
+    {
+      get: function (_, prop) {
+        return async function () {
+          var db = await init()
+          return db[prop].apply(db, arguments)
         }
       }
+    }
+  )
 
-      // update existing
-      var cur = r.docs[0]
-      var next = {}
+  return {
+    data: data,
 
-      for (var k in cur) next[k] = cur[k]
-      for (var k in update) next[k] = update[k]
+    get: async function (query, opts, onBatch) {
+      var db = await init()
+      opts = opts || {}
 
-      var res = await dbi.insert(next)
+      if (opts.count) {
+        var r = await db.find({ selector: query })
+        return { count: r.docs.length }
+      }
 
-      next._id = res.id
-      next._rev = res.rev
-      return next
+      if (onBatch) {
+        var batch = opts.batch || 100
+        var remaining = opts.limit
+        var bookmark = null
+
+        for (;;) {
+          var limit = batch
+          if (remaining !== undefined && remaining < limit) {
+            limit = remaining
+          }
+
+          var q = { selector: query, limit: limit }
+          if (opts.sort) q.sort = normalizeSort(opts.sort)
+
+          var mf = opts.fields && normalizeFields(opts.fields)
+          if (mf) q.fields = mf
+          if (bookmark) q.bookmark = bookmark
+
+          var r = await db.find(q)
+          if (!r.docs.length) break
+
+          normalizeDocs(r.docs)
+          await onBatch(r.docs)
+
+          if (remaining !== undefined) {
+            remaining -= r.docs.length
+            if (remaining <= 0) break
+          }
+
+          if (!r.bookmark || r.docs.length < limit) break
+          bookmark = r.bookmark
+        }
+        return
+      }
+
+      var q = { selector: query }
+      if (opts.sort) q.sort = normalizeSort(opts.sort)
+      if (opts.limit !== undefined) q.limit = opts.limit
+      if (opts.skip) q.skip = opts.skip
+
+      var mf = opts.fields && normalizeFields(opts.fields)
+      if (mf) q.fields = mf
+
+      var r = await db.find(q)
+      normalizeDocs(r.docs)
+      return r.docs[0] || null
     },
 
-    update: async function (query, update) {
-      var db = await ensure(name, server)
-      var r = await db.find({ selector: query })
-      if (!r.docs.length) return 0
+    set: async function (arg, values) {
+      var db = await init()
 
-      var out = []
+      if (Array.isArray(arg)) {
+        var out = []
+        for (var i = 0; i < arg.length; i++) {
+          var d = arg[i]
+          var r = await db.insert(d)
+          d.id = r.id
+          out.push(d)
+        }
+        return out
+      }
+
+      if (values === undefined) {
+        var r = await db.insert(arg)
+        arg.id = r.id
+        return arg
+      }
+
+      var r = await db.find({ selector: arg })
+      if (!r.docs.length) return { n: 0 }
+
+      if (values === null) {
+        var del = []
+        for (var i = 0; i < r.docs.length; i++) {
+          del.push({
+            _id: r.docs[i]._id,
+            _rev: r.docs[i]._rev,
+            _deleted: true
+          })
+        }
+        await db.bulk({ docs: del })
+        return { n: del.length }
+      }
+
+      var upd = []
       for (var i = 0; i < r.docs.length; i++) {
         var cur = r.docs[i]
         var next = {}
         for (var k in cur) next[k] = cur[k]
-        for (var k in update) next[k] = update[k]
-        out.push(next)
+
+        for (var k in values) {
+          if (values[k] === undefined) delete next[k]
+          else next[k] = values[k]
+        }
+        upd.push(next)
       }
 
-      await db.bulk({ docs: out })
-      return out.length
+      await db.bulk({ docs: upd })
+      return { n: upd.length }
     },
-
-    get: async function (query) {
-      var dbi = await ensure(name, server)
-      var r = await dbi.find({ selector: query, limit: 1 })
-      return r.docs[0] || null
-    },
-
-    set: async function (query, update) {
-      var dbi = await ensure(name, server)
-
-      // find one
-      var r = await dbi.find({
-        selector: query,
-        limit: 1
-      })
-
-      if (!r.docs.length) return null
-
-      var cur = r.docs[0]
-      var next = {}
-
-      // merge current doc + update
-      for (var k in cur) next[k] = cur[k]
-      for (var k in update) next[k] = update[k]
-
-      // write updated doc
-      var res = await dbi.insert(next)
-
-      // return updated document shape
-      next._id = res.id
-      next._rev = res.rev
-      return next
-    },
-
-    remove: async function (query) {
-      var dbi = await ensure(name, server)
-
-      // find one
-      var r = await dbi.find({
-        selector: query,
-        limit: 1
-      })
-
-      if (!r.docs.length) return null
-
-      var doc = r.docs[0]
-
-      // mark as deleted
-      var res = await dbi.insert({
-        _id: doc._id,
-        _rev: doc._rev,
-        _deleted: true
-      })
-
-      return {
-        _id: res.id,
-        _rev: res.rev
-      }
-    },
-
-    delete: async function (query) {
-      var dbi = await ensure(name, server)
-
-      var r = await dbi.find({ selector: query })
-      if (!r.docs.length) return 0
-
-      var out = []
-      for (var i = 0; i < r.docs.length; i++) {
-        var d = r.docs[i]
-        out.push({
-          _id: d._id,
-          _rev: d._rev,
-          _deleted: true
-        })
-      }
-
-      await dbi.bulk({ docs: out })
-      return out.length
-    },
-
-    //
-    // FIND
-    //
-
-    find: async function (query, opts) {
-      var dbi = await ensure(name, server)
-
-      var q = { selector: query }
-      if (opts) {
-        if (opts.sort) q.sort = opts.sort
-        if (opts.limit) q.limit = opts.limit
-        if (opts.fields) q.fields = opts.fields
-      }
-
-      var r = await dbi.find(q)
-      return r.docs
-    },
-
-    //
-    // INDEX
-    //
-
-    index: async function (list) {
-      var dbi = await ensure(name, server)
-      for (var i = 0; i < list.length; i++) {
-        await dbi.createIndex({ index: { fields: list[i] } })
-      }
-    },
-
-    //
-    // COUNT
-    //
-
-    count: async function (query) {
-      var dbi = await ensure(name, server)
-      var r = await dbi.find({ selector: query })
-      return r.docs.length
-    },
-
-    //
-    // DROP (collection-level)
-    //
 
     drop: async function () {
       try {
         await server.db.destroy(name)
       } catch (e) {}
-    },
-
-    //
-    // BATCH
-    //
-
-    batch: async function (query, opt, fn) {
-      var dbi = await ensure(name, server)
-
-      var size = opt && opt.size ? opt.size : 100
-      var limit = opt && opt.limit
-      var sort = opt && opt.sort
-      var fields = opt && opt.fields
-
-      var bookmark = null
-      var remaining = limit
-
-      for (;;) {
-        var effectiveSize = size
-        if (remaining && remaining < effectiveSize) {
-          effectiveSize = remaining
-        }
-
-        var q = {
-          selector: query,
-          limit: effectiveSize
-        }
-
-        if (sort) q.sort = sort
-        if (fields) q.fields = fields
-        if (bookmark) q.bookmark = bookmark
-
-        var r = await dbi.find(q)
-        var docs = r.docs
-        if (!docs.length) break
-
-        await fn(docs)
-
-        if (remaining) {
-          remaining -= docs.length
-          if (remaining <= 0) break
-        }
-
-        if (!r.bookmark || docs.length < effectiveSize) break
-        bookmark = r.bookmark
-      }
+      handle = null
+      initPromise = null
     }
   }
 }
 
-//
-// ENSURE DB EXISTS
-//
-
-async function ensure(name, server) {
-  try {
-    await server.db.get(name)
-  } catch (e) {
-    await server.db.create(name)
+function normalizeSort(sort) {
+  var out = []
+  for (var k in sort) {
+    if (sort[k] === 1) out.push({ [k]: 'asc' })
+    else if (sort[k] === -1) out.push({ [k]: 'desc' })
   }
-  return server.db.use(name)
+  return out
+}
+
+function normalizeFields(fields) {
+  var include = []
+  for (var k in fields) {
+    if (fields[k]) {
+      include.push(k === 'id' ? '_id' : k)
+    }
+  }
+  if (include.length) {
+    if (fields.id !== false && include.indexOf('_id') === -1)
+      include.push('_id')
+    return include
+  }
+  return null
+}
+
+function normalizeDocs(docs) {
+  for (var i = 0; i < docs.length; i++) {
+    docs[i].id = docs[i]._id
+    delete docs[i]._id
+    delete docs[i]._rev
+  }
 }

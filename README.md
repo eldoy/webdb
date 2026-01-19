@@ -1,279 +1,261 @@
 # WebDB
 
-Document database API backed by CouchDB, exposed through a Mongo-style client.
+A small, fast document database API with a portable query language and native backend execution.
 
-### Installation
+WebDB exposes a **single, well-defined interface** (`get` / `set`) designed to cover most web application use cases without sacrificing performance or backend features.
+
+---
+
+## Installation
+
 ```sh
 npm i @eldoy/webdb
 ```
 
-### Usage
+---
+
+## Usage
 
 ```js
 var webdb = require('@eldoy/webdb')
 var db = webdb('http://admin:mysecretpassword@localhost:5984')
+```
 
-// Create one
-var doc = await db('user').create({ name: 'Heimdal' })
+WebDB supports **named collections**:
 
-// Bulk insert
-var n = await db('user').bulk([
+```js
+var users = db('user')
+```
+
+Databases are created automatically on first use.
+
+---
+
+## Insert
+
+### Insert one document
+
+```js
+var doc = await users.set({ name: 'Alice' })
+console.log(doc.id)
+```
+
+The input object may be mutated to attach `id`.
+
+---
+
+### Bulk insert
+
+```js
+var docs = await users.set([
   { name: 'A' },
   { name: 'B' }
 ])
+```
 
-// Update one or many
-var n = await db('user').update(
-  { name: 'A' },
-  { active: true }
-)
+Returns the inserted documents (same object references).
 
-// Set (update exactly one)
-var updated = await db('user').set(
-  { name: 'A' },
-  { name: 'B', active: true }
-)
+---
 
-// Remove (delete exactly one)
-var removed = await db('user').remove(
-  { name: 'B' }
-)
+## Query (Read)
 
-// Put (create or update one)
-var doc = await db('user').put(
-  { email: 'a@example.com' },
-  { email: 'a@example.com', name: 'Alice' }
-)
+### Get first matching document
 
-// Get one (first match)
-var doc = await db('user').get({ name: 'Heimdal' })
+```js
+var doc = await users.get({ name: 'Alice' })
+```
 
-// Create indexes
-await db('user').index([
-  ['name'],
-  ['name', 'email']
-])
+Returns `null` if no match exists.
 
-// Find
-var docs = await db('user').find({ name: 'Heimdal' })
+---
 
-// Find with sort
-var docs = await db('user').find(
-  { name: 'Heimdal' },
-  { sort: [{ name: 'asc' }] }
-)
+### Count
 
-// Find with limit
-var docs = await db('user').find(
-  { name: 'Heimdal' },
-  { limit: 1 }
-)
+```js
+var r = await users.get({ active: true }, { count: true })
+console.log(r.count)
+```
 
-// Find with projection
-var docs = await db('user').find(
-  { name: 'Heimdal' },
-  { fields: ['name', 'email'] }
-)
+---
 
-// Delete one or many
-var n = await db('user').delete({ active: false })
+### Streaming / batch reads
 
-// Count
-var n = await db('user').count({ name: 'Heimdal' })
-
-// Batch processing (streamed pagination)
-await db('user').batch(
+```js
+await users.get(
   { active: true },
-  { size: 500, sort: [{ created: 'asc' }] },
+  { batch: 100, sort: { created: 1 } },
   async function (docs) {
-    // handle a chunk
+    // process a batch
   }
 )
-
-// Drop a specific database
-await db('user').drop()
-
-// Server-level compact
-await db.compact('user')
-
-// Drop all databases
-await db.drop()
 ```
 
-### Mango Query Options
+Streaming controls **delivery**, not execution.
+Internal buffering is allowed.
 
-WebDB queries map directly to CouchDB Mango selectors. All Mango operators and options work as expected through `find()` and `batch()`.
+---
 
-#### Comparison Operators
-Mango supports standard comparison operators inside selectors:
+## Query Operators
+
+Supported predicates:
 
 ```
-$eq     equal
-$ne     not equal
-$gt     greater than
-$gte    greater than or equal
-$lt     less than
-$lte    less than or equal
-$regex  regular expression matching
+$eq   $ne
+$gt   $gte
+$lt   $lte
+$in   $nin
+$regex
+$exists
+```
+
+Examples:
+
+```js
+await users.get({ age: { $gte: 18 } })
+await users.get({ email: { $regex: '@example.com$' } })
+```
+
+Logical operators:
+
+```js
+$and   $or   $not
 ```
 
 Example:
 
 ```js
-await db('user').find({
-  age: { $gte: 18 }
-})
-```
-
-#### Logical Operators
-
-Combine conditions using logical operators:
-
-```
-$and
-$or
-$not
-$nor
-```
-
-Example:
-
-```js
-await db('user').find({
+await users.get({
   $or: [{ role: 'admin' }, { active: true }]
 })
 ```
 
-#### Sorting
+---
 
-Sorting requires an index on every field in the sort specification:
+## Sorting, Limiting, Projection
+
+### Sort
 
 ```js
-await db('user').index([['created']])
-
-await db('user').find(
+await users.get(
   {},
-  { sort: [{ created: 'asc' }] }
+  { sort: { created: 1 } }
 )
 ```
 
-#### Limiting
+Sorting may require backend support or indexes.
+If unsupported, the adapter may throw.
 
-Limit returned documents:
+---
+
+### Limit / skip
 
 ```js
-await db('user').find({}, { limit: 10 })
+await users.get({}, { skip: 10, limit: 5 })
 ```
 
-#### Projection (fields)
+---
 
-Return only selected fields:
+### Projection (fields)
 
 ```js
-await db('user').find(
+await users.get(
   {},
-  { fields: ['name', 'email'] }
+  { fields: { name: true, email: true } }
 )
 ```
 
-#### Date Handling
+Notes:
 
-CouchDB stores dates as strings.
-Using ISO-8601 timestamps (`new Date().toISOString()`) enables:
+* Projection is inclusive if any field is `true`
+* `id` is included by default
+* Excluding `id` is **best-effort**
+* Adapters may still return `id`
 
-* correct lexical comparison
-* correct sorting
-* correct `$gt` / `$lt` range queries
+---
 
-Example:
+## Update
 
-```js
-await db('log').find({
-  created: { $gt: "2024-01-01T00:00:00.000Z" }
-})
-```
-
-ISO strings compare and sort in true chronological order.
-
-#### Batch Queries
-
-`batch()` supports all Mango options:
-
-* `size` (page size)
-* `limit`
-* `sort`
-* `fields`
-* standard selectors
-
-Example:
+### Update matching documents
 
 ```js
-await db('user').batch(
-  { created: { $gt: cutoff } },
-  { size: 100, sort: [{ created: 'asc' }] },
-  async function (docs) {
-    // process chunk
-  }
+var r = await users.set(
+  { active: false },
+  { active: true }
 )
+
+console.log(r.n)
 ```
 
-All Mango selectors and options work identically in both `find()` and `batch()`.
+Rules:
 
+* Shallow merge
+* `undefined` removes a field
+* `null` sets field to `null`
 
-### Notes on Indexing, Sorting, and Mango Queries
+---
 
-**1. Selector fields and indexes**
+## Delete
 
-Mango performs best when the selector matches an existing index.
-Any field used in `{ selector: … }` benefits from being part of an index, but it is not required unless sorting is used.
-
-**2. Sorting requires indexing**
-
-Mango enforces that **every field in the sort must be indexed**.
-Example:
+### Delete matching documents
 
 ```js
-await db('user').index([['age']])
-await db('user').find({}, { sort: [{ age: 'asc' }] })   // valid
+var r = await users.set({ inactive: true }, null)
+console.log(r.n)
 ```
 
-Sorting without the correct index returns an error.
+---
 
-**3. Compound indexes**
-
-An index like:
+### Clear collection
 
 ```js
-await db('user').index([['name', 'email']])
+await users.set({}, null)
 ```
 
-supports selectors and sorts that use `name`, or `name` and `email` together, in the defined order.
+Deletes all documents in the collection.
 
-**4. Projection (`fields`)**
+---
 
-Projection returns only selected fields.
-Unindexed projection works fine; indexing does not affect `fields`.
+## Adapter Extensions (Optional)
 
-**5. Pagination (batch)**
+Adapters may expose additional APIs outside dbspec:
 
-`batch()` uses Mango bookmarks internally.
-It respects all options: `sort`, `limit`, `fields`, and `size`.
+```js
+await users.drop()      // drop a collection
+await db.drop()         // drop all collections
+await db.compact('user')
+await db.info()
+```
 
-**6. Create-on-first-use**
+These are **adapter-specific** and non-portable.
 
-Databases are auto-created when used. Explicit `drop()` allows clean-state tests.
+---
 
-**7. Null results**
+## Escape Hatch (`data`)
 
-`get()` returns `null` when no match exists.
+Native backend access is available via:
 
-### ID note
+```js
+users.data
+```
 
-CouchDB stores documents with `_id`, but write responses return the same value as `id`.
-Use `doc.id` after `create()`, and `_id` for all queries and stored documents.
+This exposes the underlying client directly.
 
-### Acknowledgements
+Use of `data` is **explicitly non-portable** and bypasses dbspec guarantees.
 
-Created by [Tekki AS](https://tekki.no)
+---
 
-ISC Licensed.
+## Design Notes
+
+* The reference implementation prioritizes **native execution**
+* No client-side emulation of query semantics
+* Performance scales with the backend
+* Most web apps do not require the escape hatch
+* When switching adapters, application query logic remains stable
+
+---
+
+## License
+
+ISC
+
+Created by [Vidar Eldøy](https://eldoy.com)
