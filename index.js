@@ -37,6 +37,11 @@ async function webdb(url) {
       } catch (e) {}
     }
 
+    api.index = async function (spec) {
+      await ensure()
+      return couch.createIndex(spec)
+    }
+
     api.set = async function (query, values) {
       await ensure()
 
