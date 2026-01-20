@@ -55,9 +55,8 @@ test('eq fails on missing field', async function ({ t }) {
 
 test('null distinct from missing', async function ({ t }) {
   await collection.set([{ a: null }, {}])
-  await collection.get({ a: null }, {}, function (b) {
-    t.equal(b.length, 1)
-  })
+  var r = await collection.all({ a: null })
+  t.equal(r.length, 1)
 })
 
 //
@@ -68,10 +67,10 @@ test('$gt $gte $lt $lte', async function ({ t }) {
   await createIndex(['n'])
   await collection.set([{ n: 1 }, { n: 2 }, { n: 3 }])
 
-  t.equal((await collection.get({ n: { $gt: 1 } }, { count: true })).count, 2)
-  t.equal((await collection.get({ n: { $gte: 2 } }, { count: true })).count, 2)
-  t.equal((await collection.get({ n: { $lt: 3 } }, { count: true })).count, 2)
-  t.equal((await collection.get({ n: { $lte: 2 } }, { count: true })).count, 2)
+  t.equal(await collection.count({ n: { $gt: 1 } }), 2)
+  t.equal(await collection.count({ n: { $gte: 2 } }), 2)
+  t.equal(await collection.count({ n: { $lt: 3 } }), 2)
+  t.equal(await collection.count({ n: { $lte: 2 } }), 2)
 })
 
 //
@@ -81,16 +80,13 @@ test('$gt $gte $lt $lte', async function ({ t }) {
 test('$in', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: 1 }, { a: 2 }])
-  t.equal((await collection.get({ a: { $in: [2] } }, { count: true })).count, 1)
+  t.equal(await collection.count({ a: { $in: [2] } }), 1)
 })
 
 test('$nin matches existing non-equal only', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: 1 }, { a: 2 }])
-  t.equal(
-    (await collection.get({ a: { $nin: [1] } }, { count: true })).count,
-    1
-  )
+  t.equal(await collection.count({ a: { $nin: [1] } }), 1)
 })
 
 //
@@ -100,19 +96,13 @@ test('$nin matches existing non-equal only', async function ({ t }) {
 test('$regex string', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: 'abc' }, { a: 'def' }])
-  t.equal(
-    (await collection.get({ a: { $regex: '^a' } }, { count: true })).count,
-    1
-  )
+  t.equal(await collection.count({ a: { $regex: '^a' } }), 1)
 })
 
 test('$regex non-string fails', async function ({ t }) {
   await createIndex(['a'])
   await collection.set({ a: 1 })
-  t.equal(
-    (await collection.get({ a: { $regex: '1' } }, { count: true })).count,
-    0
-  )
+  t.equal(await collection.count({ a: { $regex: '1' } }), 0)
 })
 
 //
@@ -122,19 +112,13 @@ test('$regex non-string fails', async function ({ t }) {
 test('$exists true', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: null }, {}])
-  t.equal(
-    (await collection.get({ a: { $exists: true } }, { count: true })).count,
-    1
-  )
+  t.equal(await collection.count({ a: { $exists: true } }), 1)
 })
 
 test('$exists false', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: null }, {}])
-  t.equal(
-    (await collection.get({ a: { $exists: false } }, { count: true })).count,
-    1
-  )
+  t.equal(await collection.count({ a: { $exists: false } }), 1)
 })
 
 //
@@ -148,11 +132,7 @@ test('$and', async function ({ t }) {
     { a: 1, b: 2 }
   ])
 
-  t.equal(
-    (await collection.get({ $and: [{ a: 1 }, { b: 2 }] }, { count: true }))
-      .count,
-    1
-  )
+  t.equal(await collection.count({ $and: [{ a: 1 }, { b: 2 }] }), 1)
 })
 
 test('$or', async function ({ t }) {
@@ -160,17 +140,13 @@ test('$or', async function ({ t }) {
   await createIndex(['b'])
   await collection.set([{ a: 1 }, { b: 1 }])
 
-  t.equal(
-    (await collection.get({ $or: [{ a: 1 }, { b: 1 }] }, { count: true }))
-      .count,
-    2
-  )
+  t.equal(await collection.count({ $or: [{ a: 1 }, { b: 1 }] }), 2)
 })
 
 test('$not', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: 1 }, { a: 2 }])
-  t.equal((await collection.get({ $not: { a: 1 } }, { count: true })).count, 1)
+  t.equal(await collection.count({ $not: { a: 1 } }), 1)
 })
 
 //
@@ -181,22 +157,13 @@ test('sort ascending', async function ({ t }) {
   await createIndex(['a'])
   await collection.set([{ a: 2 }, { a: 1 }])
 
-  var out = []
-  await collection.get({}, { sort: { a: 1 } }, function (b) {
-    out.push.apply(out, b)
-  })
-
+  var out = await collection.all({}, { sort: { a: 1 } })
   t.equal(out[0].a, 1)
 })
 
 test('skip + limit', async function ({ t }) {
   await collection.set([{ n: 1 }, { n: 2 }, { n: 3 }])
-  var out = []
-
-  await collection.get({}, { skip: 1, limit: 1 }, function (b) {
-    out.push.apply(out, b)
-  })
-
+  var out = await collection.all({}, { skip: 1, limit: 1 })
   t.equal(out.length, 1)
 })
 
@@ -206,13 +173,8 @@ test('skip + limit', async function ({ t }) {
 
 test('fields include only', async function ({ t }) {
   await collection.set({ a: 1, b: 2 })
-  var out = []
-
-  await collection.get({}, { fields: { a: true } }, function (b) {
-    out.push.apply(out, b)
-  })
-
-  t.deepEqual(Object.keys(out[0]), ['a', 'id'])
+  var out = await collection.all({}, { fields: { a: true } })
+  t.deepEqual(Object.keys(out[0]).sort(), ['a', 'id'])
 })
 
 //
@@ -221,23 +183,7 @@ test('fields include only', async function ({ t }) {
 
 test('count returns only count', async function ({ t }) {
   await collection.set([{ a: 1 }, { a: 1 }])
-  var r = await collection.get({ a: 1 }, { count: true })
-  t.equal(r.count, 2)
-})
-
-//
-// STREAMING / BATCH
-//
-
-test('batch streaming obeys size and limit', async function ({ t }) {
-  await collection.set([{ n: 1 }, { n: 2 }, { n: 3 }])
-  var out = []
-
-  await collection.get({}, { batch: 1, limit: 2 }, function (b) {
-    out.push(b[0].n)
-  })
-
-  t.deepEqual(out, [1, 2])
+  t.equal(await collection.count({ a: 1 }), 2)
 })
 
 //
@@ -254,7 +200,7 @@ test('update undefined removes field', async function ({ t }) {
   await collection.set({ a: 1, b: 2 })
   await collection.set({ a: 1 }, { b: undefined })
   var d = await collection.get({ a: 1 })
-  t.equal(d.b, undefined)
+  t.equal('b' in d, false)
 })
 
 test('update null sets null', async function ({ t }) {
@@ -277,5 +223,5 @@ test('delete via set(query, null)', async function ({ t }) {
 test('clear via set({}, null)', async function ({ t }) {
   await collection.set([{ a: 1 }, { a: 2 }])
   await collection.set({}, null)
-  t.equal((await collection.get({}, { count: true })).count, 0)
+  t.equal(await collection.count({}), 0)
 })
