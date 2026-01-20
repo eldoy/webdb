@@ -44,6 +44,63 @@ async function webdb(url) {
       return couch.createIndex(spec)
     }
 
+    api.list = async function (query, options) {
+      await ensure()
+
+      options = options || {}
+      var limit = options.limit != null ? options.limit : 100
+      var skip = options.skip || 0
+
+      var res = await couch.list({ include_docs: true })
+      var rows = res.rows || []
+      var out = []
+
+      for (var i = 0; i < rows.length; i++) {
+        var doc = rows[i].doc
+        var match = true
+
+        Object.keys(query).forEach(function (k) {
+          if (doc[k] !== query[k]) match = false
+        })
+
+        if (!match) continue
+
+        var d = {}
+        Object.keys(doc).forEach(function (k) {
+          if (k === '_id') d.id = doc[k]
+          else if (k === '_rev') d.rev = doc[k]
+          else d[k] = doc[k]
+        })
+
+        out.push(d)
+      }
+
+      if (options.sort) {
+        var key = Object.keys(options.sort)[0]
+        var dir = options.sort[key]
+        out.sort(function (a, b) {
+          if (a[key] < b[key]) return -1 * dir
+          if (a[key] > b[key]) return 1 * dir
+          return 0
+        })
+      }
+
+      out = out.slice(skip, skip + limit)
+
+      if (options.fields) {
+        out = out.map(function (doc) {
+          var f = { id: doc.id }
+          Object.keys(options.fields).forEach(function (k) {
+            if (options.fields[k] && k in doc) f[k] = doc[k]
+          })
+          if (doc.rev) f.rev = doc.rev
+          return f
+        })
+      }
+
+      return out
+    }
+
     api.insert = async function (values) {
       await ensure()
 
