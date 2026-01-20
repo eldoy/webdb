@@ -101,6 +101,24 @@ async function webdb(url) {
       return out
     }
 
+    api.batch = async function (query, options, handler) {
+      await ensure()
+
+      options = options || {}
+      var size = options.size || 1000
+
+      var docs = await api.list(query, options)
+      if (!docs.length) return
+
+      for (var i = 0; i < docs.length; i += size) {
+        var chunk = docs.slice(i, i + size)
+        var res = handler(chunk)
+        if (res && typeof res.then === 'function') {
+          await res
+        }
+      }
+    }
+
     api.insert = async function (values) {
       await ensure()
 
