@@ -48,39 +48,72 @@ async function webdb(url) {
       await ensure()
 
       options = options || {}
-      var limit = options.limit != null ? options.limit : 100
+      var limit = options.limit != null ? options.limit : Infinity
       var skip = options.skip || 0
+
+      function matchPredicate(val, pred) {
+        if (pred && typeof pred === 'object' && !Array.isArray(pred)) {
+          if ('$eq' in pred) return val === pred.$eq
+          if ('$ne' in pred) return val !== pred.$ne
+          if ('$gt' in pred) return val > pred.$gt
+          if ('$gte' in pred) return val >= pred.$gte
+          if ('$lt' in pred) return val < pred.$lt
+          if ('$lte' in pred) return val <= pred.$lte
+          if ('$in' in pred)
+            return Array.isArray(pred.$in) && pred.$in.indexOf(val) !== -1
+          if ('$nin' in pred)
+            return Array.isArray(pred.$nin) && pred.$nin.indexOf(val) === -1
+          if ('$exists' in pred)
+            return pred.$exists ? val !== undefined : val === undefined
+          if ('$regex' in pred) {
+            try {
+              var re =
+                pred.$regex instanceof RegExp
+                  ? pred.$regex
+                  : new RegExp(pred.$regex)
+              return typeof val === 'string' && re.test(val)
+            } catch (e) {
+              return false
+            }
+          }
+          return false
+        }
+        return val === pred
+      }
+
+      function matchDoc(doc, query) {
+        var keys = Object.keys(query)
+        for (var i = 0; i < keys.length; i++) {
+          var k = keys[i]
+          if (!matchPredicate(doc[k], query[k])) return false
+        }
+        return true
+      }
 
       var res = await couch.list({ include_docs: true })
       var rows = res.rows || []
       var out = []
 
       for (var i = 0; i < rows.length; i++) {
-        var doc = rows[i].doc
-        var match = true
-
-        Object.keys(query).forEach(function (k) {
-          if (doc[k] !== query[k]) match = false
-        })
-
-        if (!match) continue
+        var raw = rows[i].doc
+        if (!matchDoc(raw, query)) continue
 
         var d = {}
-        Object.keys(doc).forEach(function (k) {
-          if (k === '_id') d.id = doc[k]
-          else if (k === '_rev') d.rev = doc[k]
-          else d[k] = doc[k]
+        Object.keys(raw).forEach(function (k) {
+          if (k === '_id') d.id = raw[k]
+          else if (k === '_rev') d.rev = raw[k]
+          else d[k] = raw[k]
         })
 
         out.push(d)
       }
 
       if (options.sort) {
-        var key = Object.keys(options.sort)[0]
-        var dir = options.sort[key]
+        var skey = Object.keys(options.sort)[0]
+        var dir = options.sort[skey]
         out.sort(function (a, b) {
-          if (a[key] < b[key]) return -1 * dir
-          if (a[key] > b[key]) return 1 * dir
+          if (a[skey] < b[skey]) return -1 * dir
+          if (a[skey] > b[skey]) return 1 * dir
           return 0
         })
       }
