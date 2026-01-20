@@ -27,7 +27,9 @@ async function webdb(url) {
       try {
         await client.db.get(name)
       } catch (e) {
-        await client.db.create(name)
+        try {
+          await client.db.create(name)
+        } catch {}
       }
     }
 
@@ -125,6 +127,27 @@ async function webdb(url) {
       }
 
       return { n: n }
+    }
+
+    api.count = async function (query) {
+      await ensure()
+
+      var res = await couch.list({ include_docs: true })
+      var rows = res.rows || []
+      var n = 0
+
+      for (var i = 0; i < rows.length; i++) {
+        var doc = rows[i].doc
+        var match = true
+
+        Object.keys(query).forEach(function (k) {
+          if (doc[k] !== query[k]) match = false
+        })
+
+        if (match) n++
+      }
+
+      return n
     }
 
     api.set = async function (query, values) {

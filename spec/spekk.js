@@ -1,7 +1,11 @@
 module.exports = async function () {
-  async function setup() {}
+  async function setup() {
+    await new Promise((r) => setTimeout(r, 200))
+  }
 
-  async function teardown() {}
+  async function teardown() {
+    await new Promise((r) => setTimeout(r, 200))
+  }
 
-  return {}
+  return { setup, teardown }
 }
