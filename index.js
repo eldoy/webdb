@@ -142,8 +142,8 @@ async function webdb(url) {
         ready = null
       },
 
-      async index() {
-        return (await init()).createIndex.apply(handle, arguments)
+      async index(indexes) {
+        return (await init()).createIndex(indexes)
       }
     }
   }
